@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use keri::controller::utils::OptionalConfig;
+use controller::config::ControllerConfig;
 use napi_derive::napi;
 
 #[napi]
@@ -51,7 +51,7 @@ pub struct Configs {
 }
 
 impl Configs {
-    pub fn build(&self) -> napi::Result<OptionalConfig> {
+    pub fn build(&self) -> napi::Result<ControllerConfig> {
         let oobis = if let Some(oobis) = &self.initial_oobis {
             serde_json::from_str(oobis)?
         } else {
@@ -62,9 +62,10 @@ impl Configs {
         } else {
             None
         };
-        Ok(OptionalConfig {
-            initial_oobis: oobis,
-            db_path,
+        Ok(ControllerConfig {
+            initial_oobis: oobis.unwrap_or_default(),
+            db_path: db_path.unwrap_or_default(),
+            ..Default::default()
         })
     }
 }

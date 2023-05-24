@@ -5,13 +5,17 @@ edition = "2021"
 exclude = ["index.node"]
 
 [lib]
+name = "keri_node"
 crate-type = ["cdylib"]
 
 [dependencies]
-keri = { git = "https://github.com/THCLab/keriox.git", features = ["controller"] }
+controller = { git = "https://github.com/THCLab/keriox.git"}
+cesrox = { git = "https://github.com/THCLab/cesrox", features = ["cesr-proof"], tag = "v0.1.4" }
+said = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
+keri = { git = "https://github.com/THCLab/keriox.git"}
 thiserror = "1.0"
 base64 = "0.13.0"
-napi = { version = "2", features = ["serde-json"]}
+napi = { version = "2", features = ["serde-json", "async"]}
 napi-derive = "2"
 simple_config_parser = "0.1.5"
 clap = "3.0.0-beta.4"
@@ -22,7 +26,7 @@ serde_json = "1.0.81"
 mimalloc = {version = "0.1"}
 
 [build-dependencies]
-napi-build = "1"
+napi-build = "2"
 
 
 [dev-dependencies]

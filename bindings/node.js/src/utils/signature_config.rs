@@ -1,7 +1,6 @@
-use keri::{
-    derivation::self_signing::SelfSigning,
-    prefix::{Prefix, SelfSigningPrefix},
-};
+use cesrox::primitives::codes::self_signing::SelfSigning;
+use controller::CesrPrimitive;
+use controller::SelfSigningPrefix;
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
@@ -36,7 +35,7 @@ impl SignatureBuilder {
     #[napi(constructor)]
     pub fn new(algorithm: SignatureType, signature: Buffer) -> Self {
         let d: SelfSigning = algorithm.into();
-        let pref = d.derive(signature.to_vec());
+        let pref = SelfSigningPrefix::new(d, signature.to_vec());
         Self {
             prefix: pref.to_str(),
         }

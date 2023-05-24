@@ -25,7 +25,6 @@ export const enum SignatureType {
   ECDSAsecp256k1Sha256 = 1,
   Ed448 = 2
 }
-export function incept(pks: Array<Key>, npks: Array<Key>, witnesses: Array<string>, witnessThreshold: number): Buffer
 export class ConfigBuilder {
   dbPath?: string
   initialOobis?: string
@@ -46,15 +45,15 @@ export class SignatureBuilder {
 }
 export class Controller {
   constructor(config?: Configs | undefined | null)
-  incept(pks: Array<Key>, npks: Array<Key>, witnesses: Array<string>, witnessThreshold: number): Buffer
-  finalizeInception(icpEvent: Buffer, signatures: Array<Signature>): IdController
+  incept(pks: Array<Key>, npks: Array<Key>, witnesses: Array<string>, witnessThreshold: number): Promise<Buffer>
+  finalizeInception(icpEvent: Buffer, signatures: Array<Signature>): Promise<IdController>
   getByIdentifier(id: string): IdController
 }
 export class IdController {
   getKel(): string
   getId(): string
-  rotate(pks: Array<Key>, npks: Array<Key>, witnessesToAdd: Array<string>, witnessesToRemove: Array<string>, witnessThreshold: number): Buffer
+  rotate(pks: Array<Key>, npks: Array<Key>, witnessesToAdd: Array<string>, witnessesToRemove: Array<string>, witnessThreshold: number): Promise<Buffer>
   anchor(anchoredData: Array<string>): Buffer
-  finalizeEvent(event: Buffer, signatures: Array<Signature>): void
-  signData(signature: Signature): string
+  finalizeEvent(event: Buffer, signatures: Array<Signature>): Promise<void>
+  notifyWitnesses(): Promise<void>
 }

@@ -1,21 +1,17 @@
 use std::sync::Arc;
 
-use keri::{
-    controller::{event_generator, identifier_controller::IdentifierController},
-    event_parsing::Attachment,
-    oobi::LocationScheme,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
-    },
+use controller::{
+    self, identifier_controller::IdentifierController, BasicPrefix, CesrPrimitive,
+    IdentifierPrefix, LocationScheme,
 };
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use said::SelfAddressingIdentifier;
 use utils::{configs, key_config::Key, signature_config::Signature};
 pub mod utils;
 use napi::bindgen_prelude::ToNapiValue;
 
-#[napi(object)]
-#[derive(Debug)]
+#[napi(js_name = "KeyType")]
 pub enum KeyType {
     ECDSAsecp256k1,
     Ed25519,
@@ -34,7 +30,7 @@ pub enum SignatureType {
 
 #[napi]
 struct Controller {
-    kel_data: Arc<keri::controller::Controller>,
+    kel_data: Arc<controller::Controller>,
 }
 
 #[napi]
@@ -43,7 +39,7 @@ impl Controller {
     pub fn init(config: Option<configs::Configs>) -> napi::Result<Self> {
         let optional_configs = config.map(|c| c.build().unwrap());
 
-        let c = keri::controller::Controller::new(optional_configs)
+        let c = controller::Controller::new(optional_configs.unwrap_or_default())
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
         Ok(Controller {
             kel_data: Arc::new(c),
@@ -51,7 +47,7 @@ impl Controller {
     }
 
     #[napi]
-    pub fn incept(
+    pub async fn incept(
         &self,
         pks: Vec<Key>,
         npks: Vec<Key>,
@@ -63,33 +59,36 @@ impl Controller {
         let next_keys = npks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
         let witnesses = witnesses
             .iter()
-            .map(|wit| serde_json::from_str::<LocationScheme>(wit))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            .map(|wit| {
+                serde_json::from_str::<LocationScheme>(wit)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let icp = self
             .kel_data
             .incept(curr_keys, next_keys, witnesses, witness_threshold as u64)
+            .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))
             .unwrap();
         Ok(icp.as_bytes().into())
     }
 
     #[napi]
-    pub fn finalize_inception(
+    pub async fn finalize_inception(
         &self,
         icp_event: Buffer,
         signatures: Vec<Signature>,
     ) -> napi::Result<IdController> {
-        let ssp = signatures.iter().map(|p| p.to_prefix()).collect::<Vec<_>>();
+        let ssp = &signatures.iter().map(|p| p.to_prefix()).collect::<Vec<_>>()
+        // TODO
+        [0];
         let incepted_identifier = self
             .kel_data
             .finalize_inception(&icp_event.to_vec(), ssp)
+            .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
         Ok(IdController {
-            controller: IdentifierController {
-                id: incepted_identifier,
-                source: self.kel_data.clone(),
-            },
+            controller: IdentifierController::new(incepted_identifier, self.kel_data.clone()),
         })
     }
 
@@ -109,9 +108,9 @@ struct IdController {
 
 #[napi]
 impl IdController {
-    pub fn new(id: IdentifierPrefix, kel: Arc<keri::controller::Controller>) -> Self {
+    pub fn new(id: IdentifierPrefix, kel: Arc<controller::Controller>) -> Self {
         Self {
-            controller: IdentifierController { id, source: kel },
+            controller: IdentifierController::new(id, kel),
         }
     }
     #[napi]
@@ -125,7 +124,7 @@ impl IdController {
     }
 
     #[napi]
-    pub fn rotate(
+    pub async fn rotate(
         &self,
         pks: Vec<Key>,
         npks: Vec<Key>,
@@ -139,23 +138,30 @@ impl IdController {
         let next_keys = npks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
         let witnesses_to_add = witnesses_to_add
             .iter()
-            .map(|wit| serde_json::from_str::<LocationScheme>(wit).map_err(|e| e.to_string()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            .map(|wit| {
+                serde_json::from_str::<LocationScheme>(wit)
+                    .map_err(|e| e.to_string())
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>();
         let witnesses_to_remove = witnesses_to_remove
             .iter()
-            .map(|wit| wit.parse::<BasicPrefix>())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            .map(|wit| {
+                wit.parse::<BasicPrefix>()
+                    .map_err(|e| e.to_string())
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>();
         Ok(self
             .controller
             .rotate(
                 curr_keys,
                 next_keys,
-                witnesses_to_add,
-                witnesses_to_remove,
+                witnesses_to_add?,
+                witnesses_to_remove?,
                 witness_threshold as u64,
             )
+            .await
             .unwrap()
             .as_bytes()
             .into())
@@ -165,54 +171,68 @@ impl IdController {
     pub fn anchor(&self, anchored_data: Vec<String>) -> napi::Result<Buffer> {
         let sais = anchored_data
             .iter()
-            .map(|d| d.parse::<SelfAddressingPrefix>().unwrap())
+            .map(|d| d.parse::<SelfAddressingIdentifier>().unwrap())
             .collect::<Vec<_>>();
         Ok(self.controller.anchor(&sais).unwrap().as_bytes().into())
     }
 
     #[napi]
-    pub fn finalize_event(&self, event: Buffer, signatures: Vec<Signature>) -> napi::Result<()> {
+    pub async fn finalize_event(
+        &self,
+        event: Buffer,
+        signatures: Vec<Signature>,
+    ) -> napi::Result<()> {
         let sigs = signatures
             .into_iter()
             .map(|s| s.to_prefix())
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            // TODO
+            [0]
+        .clone();
         self.controller
             .finalize_event(&event.to_vec(), sigs)
+            .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     #[napi]
-    pub fn sign_data(&self, signature: Signature) -> napi::Result<String> {
-        let attached_signature = AttachedSignaturePrefix {
-            index: 0,
-            signature: signature.to_prefix(),
-        };
-
-        let event_seal = self
-            .controller
-            .get_last_establishment_event_seal()
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-        let att = Attachment::SealSignaturesGroups(vec![(event_seal, vec![attached_signature])]);
-        Ok(att.to_cesr())
+    pub async fn notify_witnesses(&self) -> napi::Result<()> {
+        self.controller.notify_witnesses().await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(())
     }
+
+    // #[napi]
+    // pub fn sign_data(&self, signature: Signature) -> napi::Result<String> {
+    //     let attached_signature = AttachedSignaturePrefix {
+    //         index: 0,
+    //         signature: signature.to_prefix(),
+    //     };
+
+    //     let event_seal = self
+    //         .controller
+    //         .get_last_establishment_event_seal()
+    //         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    //     let att = Attachment::SealSignaturesGroups(vec![(event_seal, vec![attached_signature])]);
+    //     Ok(att.to_cesr())
+    // }
 }
 
-#[napi]
-pub fn incept(
-    pks: Vec<Key>,
-    npks: Vec<Key>,
-    witnesses: Vec<String>,
-    witness_threshold: u32,
-) -> napi::Result<Buffer> {
-    let curr_keys = pks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
-    let next_keys = npks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
-    let witnesses = witnesses
-        .iter()
-        .map(|wit| wit.parse::<BasicPrefix>().map_err(|e| e.to_string()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    let icp = event_generator::incept(curr_keys, next_keys, witnesses, witness_threshold as u64)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))
-        .unwrap();
-    Ok(icp.as_bytes().into())
-}
+// #[napi]
+// pub fn incept(
+//     pks: Vec<Key>,
+//     npks: Vec<Key>,
+//     witnesses: Vec<String>,
+//     witness_threshold: u32,
+// ) -> napi::Result<Buffer> {
+//     let curr_keys = pks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
+//     let next_keys = npks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
+//     let witnesses = witnesses
+//         .iter()
+//         .map(|wit| wit.parse::<BasicPrefix>().map_err(|e| e.to_string()))
+//         .collect::<Result<Vec<_>, _>>()
+//         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+//     let icp = event_generator::incept(curr_keys, next_keys, witnesses, witness_threshold as u64)
+//         .map_err(|e| napi::Error::from_reason(e.to_string()))
+//         .unwrap();
+//     Ok(icp.as_bytes().into())
+// }
