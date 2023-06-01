@@ -43,6 +43,7 @@ export class SignatureBuilder {
   constructor(algorithm: SignatureType, signature: Buffer)
   getSignature(): Signature
 }
+export class ActionRequired { }
 export class Controller {
   constructor(config?: Configs | undefined | null)
   incept(pks: Array<Key>, npks: Array<Key>, witnesses: Array<string>, witnessThreshold: number): Promise<Buffer>
@@ -50,10 +51,12 @@ export class Controller {
   getByIdentifier(id: string): IdController
 }
 export class IdController {
-  getKel(): string
-  getId(): string
+  getKel(): Promise<string>
+  getId(): Promise<string>
   rotate(pks: Array<Key>, npks: Array<Key>, witnessesToAdd: Array<string>, witnessesToRemove: Array<string>, witnessThreshold: number): Promise<Buffer>
-  anchor(anchoredData: Array<string>): Buffer
+  anchor(anchoredData: Array<string>): Promise<Buffer>
   finalizeEvent(event: Buffer, signatures: Array<Signature>): Promise<void>
   notifyWitnesses(): Promise<void>
+  queryMailbox(witnesses: Array<string>): Promise<Array<Buffer>>
+  finalizeQuery(event: Buffer, signature: Signature): Promise<Array<ActionRequired>>
 }

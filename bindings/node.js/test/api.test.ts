@@ -37,6 +37,19 @@ describe("Managing controller", () => {
 
     await inceptedController.notifyWitnesses();
 
+    let queryMailbox = inceptedController.queryMailbox(["BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"]);
+    let querySignaturePrefix
+    (await queryMailbox).forEach(element => 
+      {
+        querySignaturePrefix = new SignatureBuilder(sigType, Buffer.from(currentKeyManager.sign(element)))
+        console.log("query: " + element)
+        console.log("sign: " + querySignaturePrefix)
+        inceptedController.finalizeQuery(Buffer.from(element), querySignaturePrefix)
+      }
+      )
+
+
+
     console.log(await inceptedController.getKel())
 
     // let rotationEvent = await inceptedController.rotate([pk2.getKey()], [pk3.getKey()], [], ["BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"], 0);

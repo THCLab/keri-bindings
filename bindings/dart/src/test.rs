@@ -655,6 +655,9 @@ pub fn test_signing_verifing() -> Result<()> {
         finalize_query(signing_identifier.clone(), qry, signature)?;
     }
 
+
+    
+
     // let signingn_idenifeir_kel = get_kel(signing_identifier.clone())?;
 
     // Sign data by signing identifier
