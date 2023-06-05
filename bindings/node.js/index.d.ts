@@ -49,6 +49,7 @@ export class Controller {
   incept(pks: Array<Key>, npks: Array<Key>, witnesses: Array<string>, witnessThreshold: number): Promise<Buffer>
   finalizeInception(icpEvent: Buffer, signatures: Array<Signature>): Promise<IdController>
   getByIdentifier(id: string): IdController
+  verifyFromCesr(cesrStream: string): void
 }
 export class IdController {
   getKel(): Promise<string>
@@ -59,4 +60,5 @@ export class IdController {
   notifyWitnesses(): Promise<void>
   queryMailbox(witnesses: Array<string>): Promise<Array<Buffer>>
   finalizeQuery(event: Buffer, signature: Signature): Promise<Array<ActionRequired>>
+  signData(signature: Signature): Promise<string>
 }

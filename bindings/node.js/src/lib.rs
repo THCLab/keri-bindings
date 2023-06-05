@@ -1,10 +1,12 @@
-use std::sync::{Arc};
+use std::sync::Arc;
 
+use cesrox::group::Group;
 use controller::{
-    self, identifier_controller::IdentifierController, BasicPrefix, CesrPrimitive,
-    IdentifierPrefix, LocationScheme, mailbox_updating::ActionRequired as KeriActionRequired, CryptoBox, KeyManager,
+    self, identifier_controller::IdentifierController,
+    mailbox_updating::ActionRequired as KeriActionRequired, BasicPrefix, CesrPrimitive,
+    IdentifierPrefix, LocationScheme,
 };
-use keri::{event_message::cesr_adapter::{parse_event_type, EventType}, actor::event_generator::incept};
+use keri::event_message::cesr_adapter::{parse_event_type, EventType};
 use napi::{bindgen_prelude::*, tokio::sync::RwLock};
 use napi_derive::napi;
 use said::SelfAddressingIdentifier;
@@ -31,7 +33,7 @@ pub enum SignatureType {
 
 #[napi]
 struct ActionRequired {
-    action: KeriActionRequired
+    action: KeriActionRequired,
 }
 
 #[napi]
@@ -94,7 +96,10 @@ impl Controller {
             .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
         Ok(IdController {
-            controller: RwLock::new(IdentifierController::new(incepted_identifier, self.kel_data.clone())),
+            controller: RwLock::new(IdentifierController::new(
+                incepted_identifier,
+                self.kel_data.clone(),
+            )),
         })
     }
 
@@ -104,6 +109,13 @@ impl Controller {
             id.parse().unwrap(),
             self.kel_data.clone(),
         ))
+    }
+
+    #[napi]
+    pub fn verify_from_cesr(&self, cesr_stream: String) -> Result<()> {
+        self.kel_data
+            .verify_from_cesr(&cesr_stream)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 }
 
@@ -160,7 +172,8 @@ impl IdController {
             .collect::<Result<Vec<_>, _>>();
         Ok(self
             .controller
-            .read().await
+            .read()
+            .await
             .rotate(
                 curr_keys,
                 next_keys,
@@ -180,7 +193,14 @@ impl IdController {
             .iter()
             .map(|d| d.parse::<SelfAddressingIdentifier>().unwrap())
             .collect::<Vec<_>>();
-    Ok(self.controller.read().await.anchor(&sais).unwrap().as_bytes().into())
+        Ok(self
+            .controller
+            .read()
+            .await
+            .anchor(&sais)
+            .unwrap()
+            .as_bytes()
+            .into())
     }
 
     #[napi]
@@ -196,7 +216,9 @@ impl IdController {
             // TODO
             [0]
         .clone();
-        self.controller.read().await
+        self.controller
+            .read()
+            .await
             .finalize_event(&event.to_vec(), sigs)
             .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))
@@ -205,7 +227,8 @@ impl IdController {
     #[napi]
     pub async fn notify_witnesses(&self) -> napi::Result<()> {
         self.controller
-            .read().await
+            .read()
+            .await
             .notify_witnesses()
             .await
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -222,8 +245,7 @@ impl IdController {
                     .map_err(|_e| napi::Error::from_reason("Not basic prefix in witness list."))
             })
             .collect();
-        let current_controller = self.controller
-            .read().await;
+        let current_controller = self.controller.read().await;
         current_controller
             .query_mailbox(&current_controller.id, &witnesses?)
             .map_err(|e| napi::Error::from_reason(e.to_string()))?
@@ -242,12 +264,10 @@ impl IdController {
         event: Buffer,
         signature: Signature,
     ) -> napi::Result<Vec<ActionRequired>> {
-  
         let query =
             parse_event_type(&event.to_vec()).map_err(|e| Error::from_reason(e.to_string()))?;
         match query {
-            EventType::Qry(ref qry) => {
-                Ok(self
+            EventType::Qry(ref qry) => Ok(self
                 .controller
                 .write()
                 .await
@@ -255,169 +275,20 @@ impl IdController {
                 .await
                 .map_err(|e| Error::from_reason(e.to_string()))?
                 .into_iter()
-                .map(|ar| ActionRequired {action:ar})
-                .collect())
-            },
-            _ => {Err(Error::from_reason("Improper event type"))},
+                .map(|ar| ActionRequired { action: ar })
+                .collect()),
+            _ => Err(Error::from_reason("Improper event type")),
         }
     }
 
+    #[napi]
+    pub async fn sign_data(&self, signature: Signature) -> napi::Result<String> {
+        let current_controller = self.controller.read().await;
+        let signature = current_controller
+            .sign(signature.p.parse().unwrap(), 0)
+            .unwrap();
+        let group: Group = signature.into();
 
-    // #[napi]
-    // pub fn sign_data(&self, signature: Signature) -> napi::Result<String> {
-    //     let attached_signature = AttachedSignaturePrefix {
-    //         index: 0,
-    //         signature: signature.to_prefix(),
-    //     };
-
-    //     let event_seal = self
-    //         .controller
-    //         .get_last_establishment_event_seal()
-    //         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    //     let att = Attachment::SealSignaturesGroups(vec![(event_seal, vec![attached_signature])]);
-    //     Ok(att.to_cesr())
-    // }
+        Ok(group.to_cesr_str())
+    }
 }
-
-// #[napi]
-// pub fn incept(
-//     pks: Vec<Key>,
-//     npks: Vec<Key>,
-//     witnesses: Vec<String>,
-//     witness_threshold: u32,
-// ) -> napi::Result<Buffer> {
-//     let curr_keys = pks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
-//     let next_keys = npks.iter().map(|k| k.to_prefix()).collect::<Vec<_>>();
-//     let witnesses = witnesses
-//         .iter()
-//         .map(|wit| wit.parse::<BasicPrefix>().map_err(|e| e.to_string()))
-//         .collect::<Result<Vec<_>, _>>()
-//         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-//     let icp = event_generator::incept(curr_keys, next_keys, witnesses, witness_threshold as u64)
-//         .map_err(|e| napi::Error::from_reason(e.to_string()))
-//         .unwrap();
-//     Ok(icp.as_bytes().into())
-// }
-
-//     #[test]
-//     fn test() {
-//         let cont = Controller::init(None);
-        
-//         let witness_id = "BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC".to_string();
-//         let wit_location = r#"{"eid":"BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC","scheme":"http","url":"http://127.0.0.1:3232/"}"#.to_string();
-
-//         // Setup signing identifier
-//         let key_manager = CryptoBox::new().unwrap();
-//         let current_b64key = base64::encode_config(key_manager.public_key().key(), base64::URL_SAFE);
-//         let next_b64key = base64::encode_config(key_manager.next_public_key().key(), base64::URL_SAFE);
-
-//         let pk = Key { p: todo!() } new_public_key(Basic::Ed25519, current_b64key)?;
-//         let npk = new_public_key(Basic::Ed25519, next_b64key)?;
-//         let icp_event = incept(vec![pk], vec![npk], vec![wit_location.clone()], 1)?;
-//         let hex_signature = hex::encode(key_manager.sign(icp_event.as_bytes())?);
-//         let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_signature);
-//         let signing_identifier = finalize_inception(icp_event, signature)?;
-//         let oobi = format!(
-//             r#"{{"cid":"{}","role":"witness","eid":"BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"}}"#,
-//             signing_identifier.id
-//         );
-//         println!("\n\noobi: {}\n\n", oobi);
-
-//         // Publish own event to witnesses
-//         notify_witnesses(signing_identifier.clone())?;
-
-//         // Quering own mailbox to get receipts
-//         // TODO always qry mailbox
-//         let query = query_mailbox(
-//             signing_identifier.clone(),
-//             signing_identifier.clone(),
-//             vec![witness_id.clone()],
-//         )?;
-
-//         for qry in query {
-//             let hex_signature = hex::encode(key_manager.sign(qry.as_bytes())?);
-//             let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_signature);
-//             finalize_query(signing_identifier.clone(), qry, signature)?;
-//         }
-
-//         // let signingn_idenifeir_kel = get_kel(signing_identifier.clone())?;
-
-//         // Sign data by signing identifier
-//         let data_to_sing = r#"{"hello":"world"}"#;
-//         let hex_signature = hex::encode(key_manager.sign(data_to_sing.as_bytes())?);
-
-//         let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_signature);
-//         let signed = sign_to_cesr(
-//             signing_identifier.clone(),
-//             data_to_sing.to_string(),
-//             signature,
-//         )?;
-//         println!("signed: {}", &signed);
-
-//         // Simulate using other device, with no signing identifier kel events inside.
-//         change_controller(verifing_id_path.clone())?;
-
-//         // Setup verifing identifier
-//         let key_manager = CryptoBox::new().unwrap();
-//         let current_b64key = base64::encode_config(key_manager.public_key().key(), base64::URL_SAFE);
-//         let next_b64key = base64::encode_config(key_manager.next_public_key().key(), base64::URL_SAFE);
-
-//         let pk = new_public_key(Basic::Ed25519, current_b64key)?;
-//         let npk = new_public_key(Basic::Ed25519, next_b64key)?;
-//         let icp_event = incept(vec![pk], vec![npk], vec![], 0)?;
-//         let hex_signature = hex::encode(key_manager.sign(icp_event.as_bytes())?);
-//         let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_signature);
-
-//         let verifing_identifier = finalize_inception(icp_event, signature)?;
-
-//         // Configure watcher for verifing identifier
-//         let watcher_oobi = r#"{"eid":"BF2t2NPc1bwptY1hYV0YCib1JjQ11k9jtuaZemecPF5b","scheme":"http","url":"http://localhost:3236/"}"#.to_string();
-
-//         let add_watcher_message = add_watcher(verifing_identifier.clone(), watcher_oobi)?;
-//         println!(
-//             "\nController generate end role message to add watcher: \n{}",
-//             add_watcher_message
-//         );
-//         let hex_sig = hex::encode(key_manager.sign(add_watcher_message.as_bytes()).unwrap());
-//         let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_sig);
-
-//         finalize_event(verifing_identifier.clone(), add_watcher_message, signature).unwrap();
-//         let kel = get_kel(verifing_identifier.clone());
-//         assert!(kel.is_ok());
-//         println!("\n\nverifing id kel: {}\n\n", kel.unwrap());
-
-//         let kel = get_kel(signing_identifier.clone());
-//         // Unknown identifier error
-//         assert!(kel.is_err());
-
-//         let stream = format!("{}{}{}", wit_location, oobi, signed);
-//         let splitted = split_oobis_and_data(stream)?;
-
-//         // Provide signing identifier oobi to watcher.
-//         for oobi in splitted.oobis {
-//             send_oobi_to_watcher(verifing_identifier.clone(), oobi)?;
-//         }
-
-//         let kel = get_kel(signing_identifier.clone());
-//         // Unknown identifier error
-//         assert!(kel.is_err());
-
-//         // Query watcher for results of resolving signing identifier oobis. It will provide signing identifier kel events.
-//         let query = query_watchers(verifing_identifier.clone(), signing_identifier.clone())?;
-
-//         for qry in query {
-//             let hex_signature = hex::encode(key_manager.sign(qry.as_bytes())?);
-//             let signature = signature_from_hex(SelfSigning::Ed25519Sha512, hex_signature);
-//             finalize_query(verifing_identifier.clone(), qry, signature)?;
-//         }
-
-//         let kel = get_kel(signing_identifier.clone());
-//         assert!(kel.is_ok());
-
-//         // Verify provied signed message.
-//         for acdc in splitted.credentials {
-//             assert!(verify_from_cesr(acdc).unwrap());
-//         }
-
-//         Ok(())
-// }

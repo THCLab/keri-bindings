@@ -1,5 +1,7 @@
 import KeyPair from "./support/key_pair";
 import { ConfigBuilder, Controller, KeyType, PublicKey, SignatureBuilder, SignatureType } from "index";
+import { sleep } from "@napi-rs/package-template";
+import { assert } from "console";
 
 describe("Managing controller", () => {
   it("", async () => {
@@ -37,47 +39,65 @@ describe("Managing controller", () => {
 
     await inceptedController.notifyWitnesses();
 
-    let queryMailbox = inceptedController.queryMailbox(["BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"]);
+    let queryMailbox = await inceptedController.queryMailbox(["BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"]);
     let querySignaturePrefix
-    (await queryMailbox).forEach(element => 
-      {
+
+    Promise.all(queryMailbox.map(async(element) => {
         querySignaturePrefix = new SignatureBuilder(sigType, Buffer.from(currentKeyManager.sign(element)))
-        console.log("query: " + element)
-        console.log("sign: " + querySignaturePrefix)
-        inceptedController.finalizeQuery(Buffer.from(element), querySignaturePrefix)
+        await inceptedController.finalizeQuery(Buffer.from(element), querySignaturePrefix.getSignature())
       }
-      )
+      ));
+   
+    await new Promise(r => setTimeout(r, 2000));
+    console.log(await inceptedController.getKel())
 
+    let rotationEvent = await inceptedController.rotate([pk2.getKey()], [pk3.getKey()], [], [], 1);
+    console.log(rotationEvent.toString())
 
+    let signature2 = nextKeyManager.sign(rotationEvent);
+    let signaturePrefix2 = new SignatureBuilder(sigType, Buffer.from(signature2));
+
+    await inceptedController.finalizeEvent(rotationEvent, [signaturePrefix2.getSignature()])
+    console.log(await inceptedController.getKel())
+
+    await inceptedController.notifyWitnesses();
+
+    queryMailbox = await inceptedController.queryMailbox(["BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"]);
+    querySignaturePrefix
+
+    Promise.all(queryMailbox.map(async(element) => {
+        querySignaturePrefix = new SignatureBuilder(sigType, Buffer.from(nextKeyManager.sign(element)))
+        await inceptedController.finalizeQuery(Buffer.from(element), querySignaturePrefix.getSignature())
+      }
+      ));
+
+    let interactionEvent = await inceptedController.anchor(["E3WFzw8WgDMFPpup9UJI3Wwu41h16NNJVzkKclj2_6Rc"]);
+    let signature3 = nextKeyManager.sign(interactionEvent);
+    let signaturePrefix3 = new SignatureBuilder(sigType, Buffer.from(signature3));
+
+    inceptedController.finalizeEvent(interactionEvent, [signaturePrefix3.getSignature()])
+    await inceptedController.notifyWitnesses();
+
+    queryMailbox = await inceptedController.queryMailbox(["BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC"]);
+    querySignaturePrefix
+
+    Promise.all(queryMailbox.map(async(element) => {
+        querySignaturePrefix = new SignatureBuilder(sigType, Buffer.from(nextKeyManager.sign(element)))
+        await inceptedController.finalizeQuery(Buffer.from(element), querySignaturePrefix.getSignature())
+      }
+      ));
 
     console.log(await inceptedController.getKel())
 
-    // let rotationEvent = await inceptedController.rotate([pk2.getKey()], [pk3.getKey()], [], ["BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"], 0);
-    // console.log(rotationEvent.toString())
+    let stringData = `{"data":"important data"}`
+    let dataToSign = Buffer.from(stringData)
+    let dataSignature = nextKeyManager.sign(dataToSign);
+    let dataSignaturePrefix = new SignatureBuilder(sigType, Buffer.from(dataSignature));
+    let attachedSignature = await inceptedController.signData(dataSignaturePrefix.getSignature());
 
-    // let signature2 = nextKeyManager.sign(rotationEvent);
-    // let signaturePrefix2 = new SignatureBuilder(sigType, Buffer.from(signature2));
+    let signedACDC = stringData.concat(attachedSignature);
+    console.log(signedACDC)
 
-    // await inceptedController.finalizeEvent(rotationEvent, [signaturePrefix2.getSignature()])
-    // console.log(inceptedController.getKel())
-
-    // let interactionEvent = inceptedController.anchor(["E3WFzw8WgDMFPpup9UJI3Wwu41h16NNJVzkKclj2_6Rc"]);
-    // let signature3 = nextKeyManager.sign(interactionEvent);
-    // let signaturePrefix3 = new SignatureBuilder(sigType, Buffer.from(signature3));
-
-    // inceptedController.finalizeEvent(interactionEvent, [signaturePrefix3.getSignature()])
-    // console.log(inceptedController.getKel())
-
-    // console.log(inceptedController.getId())
-    // let id_cont = cont.getByIdentifier(controller)
-    // // console.log(cont)
-    // let stringData = `{"data":"important data"}`
-    // let dataToSign = Buffer.from(stringData)
-    // let dataSignature = nextKeyManager.sign(dataToSign);
-    // let dataSignaturePrefix = new SignatureBuilder(sigType, Buffer.from(dataSignature));
-    // let attachedSignature = inceptedController.signData(dataSignaturePrefix.getSignature());
-
-    // let signedACDC = stringData.concat(attachedSignature);
-    // console.log(signedACDC)
+    assert(controller.verifyFromCesr(signedACDC))
   });
 });

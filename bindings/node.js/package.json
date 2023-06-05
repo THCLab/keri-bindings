@@ -3,7 +3,7 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "package": "keri-bindings-node.js",
-  "version":"0.2.5",
+  "version": "0.2.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/THCLab/keri-bindings/bindings/node.js"
@@ -35,5 +35,9 @@
     "build:debug": "napi build",
     "test": "jest -c jest.ts-config.js",
     "compile": "ttsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "cli-format": "^3.0.9",
+    "prettier": "^2.8.8"
   }
 }
