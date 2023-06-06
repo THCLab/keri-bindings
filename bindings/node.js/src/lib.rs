@@ -189,15 +189,15 @@ impl IdController {
 
     #[napi]
     pub async fn anchor(&self, anchored_data: Vec<String>) -> napi::Result<Buffer> {
-        let sais = anchored_data
+        let sais: Result<Vec<_>> = anchored_data
             .iter()
-            .map(|d| d.parse::<SelfAddressingIdentifier>().unwrap())
-            .collect::<Vec<_>>();
+            .map(|d| d.parse::<SelfAddressingIdentifier>().map_err(|e| napi::Error::from_reason(e.to_string())))
+            .collect();
         Ok(self
             .controller
             .read()
             .await
-            .anchor(&sais)
+            .anchor(&sais?)
             .unwrap()
             .as_bytes()
             .into())
