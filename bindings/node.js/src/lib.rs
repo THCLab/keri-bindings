@@ -191,7 +191,7 @@ impl IdController {
     pub async fn anchor(&self, anchored_data: Vec<String>) -> napi::Result<Buffer> {
         let sais: Result<Vec<_>> = anchored_data
             .iter()
-            .map(|d| d.parse::<SelfAddressingIdentifier>().map_err(|e| napi::Error::from_reason(e.to_string())))
+            .map(|d| d.parse::<SelfAddressingIdentifier>().map_err(|_e| napi::Error::from_reason("Can't parse sai prefix")))
             .collect();
         Ok(self
             .controller

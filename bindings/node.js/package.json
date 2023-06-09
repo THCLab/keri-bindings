@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "cli-format": "^3.0.9",
+    "fs-temp": "^2.0.1",
     "prettier": "^2.8.8"
   }
 }

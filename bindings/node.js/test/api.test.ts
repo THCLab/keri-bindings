@@ -2,14 +2,16 @@ import KeyPair from "./support/key_pair";
 import { ConfigBuilder, Controller, KeyType, PublicKey, SignatureBuilder, SignatureType } from "index";
 import { sleep } from "@napi-rs/package-template";
 import { assert } from "console";
+import { dirSync} from "tmp";
 
 describe("Managing controller", () => {
   it("", async () => {
+    const tmpdir = dirSync();
     const currentKeyManager = new KeyPair();
     const nextKeyManager = new KeyPair();
     const nextNextKeyManager = new KeyPair();
 
-    let config = new ConfigBuilder().withDbPath("./database").build();
+    let config = new ConfigBuilder().withDbPath(tmpdir.name).build();
     let controller = new Controller(config);
 
     let keyType = KeyType.Ed25519;
@@ -70,10 +72,11 @@ describe("Managing controller", () => {
 
 describe("Witness communication", () => {
   it("", async () => {
+    const tmpdir = dirSync();
     const currentKeyManager = new KeyPair();
     const nextKeyManager = new KeyPair();
 
-    let config = new ConfigBuilder().withDbPath("./test-database").build();
+    let config = new ConfigBuilder().withDbPath(tmpdir.name).build();
     let controller = new Controller(config);
 
     let keyType = KeyType.Ed25519;
