@@ -1,10 +1,13 @@
 use std::str::FromStr;
 
-use said::{derivation::{HashFunctionCode, HashFunction}, SelfAddressingIdentifier};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    SelfAddressingIdentifier,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub fn derive( derivation: Derivation, data: &str,) -> String {
+pub fn derive(derivation: Derivation, data: &str) -> String {
     let derivation = HashFunction::from(match derivation {
         Derivation::Blake3_256 => HashFunctionCode::Blake3_256,
         Derivation::Blake3_512 => HashFunctionCode::Blake3_512,
