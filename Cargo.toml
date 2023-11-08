@@ -2,8 +2,8 @@
 resolver = "2"
 
 members = [
-    "bindings/keri/dart",
-    "bindings/said/sai_wasm"
+    "keri/dart",
+    "said/sai_wasm"
 ]
 
 [profile.release]
