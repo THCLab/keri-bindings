@@ -1,7 +1,12 @@
 [workspace]
+resolver = "2"
 
 members = [
     "bindings/keri/dart",
-    "bindings/said/sai_python",
     "bindings/said/sai_wasm"
 ]
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
