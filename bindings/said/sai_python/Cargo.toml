@@ -1,0 +1,24 @@
+[package]
+name = "sai_python"
+version = "0.2.1"
+edition = "2018"
+authors = ["Human Colossus"]
+description = "Self-Addressing identifier library"
+documentation = "https://github.com/thclab/sai"
+homepage = "https://github.com/thclab/sai"
+repository = "https://github.com/thclab/sai"
+license = "Apache-2.0"
+keywords = ["keri", "SAI", "identifier"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "sai_python"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+said = { version = "0.3.0"}
+cpython = { version = "0.5", features = ["extension-module"] }
+
+[build-dependencies]
+flapigen = "0.6.0-pre7"

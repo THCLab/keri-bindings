@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <title>wasm example</title>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <style>
+      :root {
+        --primary: #1e88e5;
+      }
+      #logo {
+        max-height: 100px;
+      }
+      #msg-box {
+        padding: 10px;
+        display: none;
+        margin: 20px;
+      }
+      .success{
+        color: #155724;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+      }
+      .error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+      }
+    </style>
+    <script type="module">
+      import init, {verify, derive, Derivation} from "./../pkg/sai_wasm.js";
+      init()
+        window.addEventListener("load", function() {
+          document.getElementById('sai-gen-form').addEventListener("submit", function(e) {
+            e.preventDefault();
+            let data = document.getElementById("data").value;
+            let derString = document.getElementById("der-to-generate").value;
+            let der = getDerevation(derString);
+            console.log(derString, der);
+            let sai = derive(der, data);
+            document.getElementById("sai").value = sai;
+          })
+          document.getElementById('sai-verify-form').addEventListener("submit", function(e) {
+            e.preventDefault();
+            let data = document.getElementById("data-to-verify").value;
+            let sai = document.getElementById("sai-to-verify").value;
+            let msgBox = document.getElementById("msg-box");
+            msgBox.classList.remove("success");
+            msgBox.classList.remove("error");
+            try {
+              let isValid = verify(sai, data)
+              if (isValid) {
+                msgBox.classList.add("success");
+                msgBox.style.display = "block";
+                msgBox.innerHTML = "Self-Addressing Identifier identifies provided data";
+              } else {
+                msgBox.classList.add("error");
+                msgBox.innerHTML = "Self-Addressing Identifier does not correspodn to the given data try to change the algorithm or make sure that the data is correct";
+                msgBox.style.display = "block";
+              }
+            } catch (e) {
+              msgBox.classList.add("error");
+              msgBox.innerHTML = e;
+              msgBox.classList.add("error");
+              msgBox.style.display = "block";
+
+            }
+          })
+        });
+       function getDerevation(i) {
+          //set default deraviation alg.
+          let der = Derivation.SHA2_256;
+
+          switch(i) {
+              case "SHA2_256":
+                der = Derivation.SHA2_256;
+                break;
+              case "SHA2_512":
+                der = Derivation.SHA2_512;
+                break;
+              case "SHA3_256":
+                der = Derivation.SHA3_256;
+                break;
+              case "SHA3_512":
+                der = Derivation.SHA3_512;
+                break;
+              case "Blake3_256":
+                der = Derivation.Blake3_256;
+                break;
+              case "Blake3_512":
+                der = Derivation.Blake3_512;
+                break;
+              case "Blake2B256":
+                der = Derivation.Blake2B256;
+                break;
+              case "Blake2S256":
+                der = Derivation.Blake2S256;
+                break;
+              case "Blake2B512":
+                der = Derivation.Blake2B512;
+                break;
+          }
+          return der;
+       }
+    </script>
+  </head>
+  <body>
+    <main class="container">
+      <center>
+        <img id="logo" src="HCF_base-04.svg" alt="Human Colossus Foundation"/>
+      </center>
+      <br/>
+      <br/>
+      <h2> Self-Addressing identifier - examples</h2>
+      <p> This example shows how to generate Self-Addressing Identifier for any
+        arbitrary data. Read more about it at <a href="https://github.com/thclab/sai"> project page </a></p>
+
+
+      <div id="msg-box"> </div>
+
+      <div class="grid">
+
+        <div>
+
+          <form id="sai-gen-form">
+            <label for="data">
+              String to hash
+              <textarea id="data" name="data" placeholder="hash me" required></textarea>
+            </label>
+            <label for="hash">Type of hashing algorithm</label>
+            <select id="der-to-generate" required>
+              <option value="" selected>Select a algorithm</option>
+              <option selected>SHA2_256</option>
+              <option selected>SHA2_512</option>
+              <option selected>SHA3_256</option>
+              <option selected>SHA3_512</option>
+              <option selected>Blake3_256</option>
+              <option selected>Blake3_512</option>
+              <option selected>Blake2B256</option>
+              <option selected>Blake2S256</option>
+              <option selected>Blake2B512</option>
+            </select>
+
+            <!-- Button -->
+            <button type="submit">Generate</button>
+
+            <label for="sai">
+              Self-addressing identifier
+              <input type="text" id="sai" name="sai">
+              </input>
+            </label>
+
+          </form>
+
+        </div>
+        <div>
+          <form id="sai-verify-form">
+            <label for="data">
+              String to verify
+              <textarea id="data-to-verify" name="data" placeholder="verify me" required></textarea>
+            </label>
+
+            <label for="sai">
+              Self-addressing identifier
+              <input type="text" id="sai-to-verify" name="sai" required>
+              </input>
+            </label>
+
+            <!-- Button -->
+            <button type="submit">Verify</button>
+
+          </form>
+
+        </div>
+    </main>
+
+
+  </body>
+</html>

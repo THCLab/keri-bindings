@@ -2,4 +2,6 @@
 
 members = [
     "bindings/keri/dart",
+    "bindings/said/sai_python",
+    "bindings/said/sai_wasm"
 ]
